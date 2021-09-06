@@ -1,68 +1,77 @@
 #include <avr/io.h> // Il s'agit de la bibliotheque qui permet de faire la lecture et l'ecriture avec le microcontroleur.
+#include <util/delay.h> // Cette bilbiotheque nous permet de produire un delais d'une taille definie en ms.
+
+#define VERT 0x01 // PINA = VERT;
+#define JAUNE 0x02 // PINA = JAUNE;
 #define F_CPU 8000000
-#include <avr/delay.h> // Cette bilbiotheque nous permet de produire un delais d'une taille definie en ms.
 
-#define VERT 0x01
-#define JAUNE 0x02
-int main()
-{
 
-  DDRA = 0xff; //One PORT A est en mode sortie. En theorie, il ne serait necessaire que d'avoir le port A0 et le port A1 comme etant des ports de sortie.
-  // par contre, dans notre situation, on est paresseux donc on fera l'utilisation de 0xff ce qui veut dire que tout les ports A seront des ports de sortie.
-  // par contre, si l'on voulait etre riguoureux, il serait possible d'ecrire que l'on voudrait avoir DDRA = 0b00000011.
+// Methode qui permet de changer la couleur de la lumiere
+void changementCouleur(uint8_t& couleurCourante){
+  if (couleurCourante == VERT){
+    couleurCourante = JAUNE;
+  } else {
+    couleurCourante = VERT;
+  }
+}
 
-  DDRD = 0x00; // PORT D est en mode entree. Il s'agit de la meme explication, mais pour l'entree. On a ete paresseux.
+// Methode qui verifie s'il y a eu un changement d'etat
+bool verifieSiRelachementInterupteur(bool etatInitial, bool etatFinal){
+  if (etatInitial == true && etatFinal == false){
+    return true;
+  }
+  return false;
+}
 
-  uint8_t valeur = 0x00; 
+// Methode qui verifie l'etat courant est a On et qu'il ne s'agit pas d'un changement soudain.
+bool verifieSiInterupteurUtilise(){
   uint8_t lecteur = 0x00;
 
-  bool alternator = false;
-  bool stateOldMachine = false;
-  bool stateMachine = false;
+  // On fait la première lecture du port D2.
+  lecteur = PIND & (1 << PORTD2);
 
-  // (1 << PORTD2) = 00000100
+  if (lecteur == (1 << PORTD2)){
 
-  for(;;) // Deuxième partie où on fait l'utilisation des entrées.
-  {
+    // On fait une deuxie lecture du port D2 apres un delai.
+    _delay_ms(10);
     lecteur = PIND & (1 << PORTD2);
 
-// On vérifie que l'utilisateur est bel et bien en train de faire l'ouverture du bouton.
-    if (lecteur == (1 << PORTD2)) {
-      _delay_ms(10);
-      if (lecteur == (1 << PORTD2)){
-        stateMachine = true;
-        // Il n'y a eu aucun changement.
-        if (stateOldMachine == true){
-          if (alternator){
-           PINA = VERT;
-          } else {
-            PINA = JAUNE;
-          }
-        }
-        // Il y a eu un changement.
-        else {
-          alternator = !alternator;
-          if (alternator){
-            PINA = VERT;
-          } else {
-            PINA = JAUNE;
-          }
-        }
-        stateOldMachine = stateMachine;
+    if (lecteur == (1 << PORTD2)){
+      return true;
+    }
+  }
+  return false;
+}
 
-      } else {
-        stateOldMachine = false;
-      }
+// main
+int main()
+{
+  DDRA = 0xff; 
+  DDRD = 0x00; 
+
+  bool etatInitial = false;
+  bool etatFinal = false;
+  uint8_t couleurCourante = 0x00;
+
+  for(;;){
+
+    // 1. On verifie que l'interupteur est en cours d'utilisation.
+    if (verifieSiInterupteurUtilise()){
+      etatFinal = true;
+      PINA = couleurCourante;
+      
     } else {
-      stateOldMachine = false;
+      etatFinal = false;
+      PINA = 0x00;
+    }
+    // 2. Lorsque l'interupteur est relache, on change la couleur.
+    if(verifieSiRelachementInterupteur(etatInitial, etatFinal)){
+      changementCouleur(couleurCourante);
     }
 
+    // 3. Pour la prochaine iteration, l'etat initial devriendra l'etat final.
+    etatInitial = etatFinal;
   }
-  // On vérifie que l'utilisateur a relâché le bouton
-
-
-
 
   return 0; 
 }
-
